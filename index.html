@@ -98,7 +98,7 @@ h1 { font-family: var(--font-display); font-weight: 800; font-size: 34px; letter
 .win p { margin: 0; color: var(--ink-soft); }
 
 .panel { display: flex; flex-direction: column; gap: 18px; width: 100%; max-width: 540px; margin: 0 auto; }
-.tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.tools { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .tool {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   min-height: 56px; padding: 6px 4px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; font-weight: 500;
@@ -109,6 +109,8 @@ h1 { font-family: var(--font-display); font-weight: 800; font-size: 34px; letter
 .tool[aria-pressed="true"] small { color: var(--accent-ink); }
 .tool:disabled { opacity: 0.45; cursor: default; }
 
+.tool.warn { background: var(--err-bg); border-color: var(--err); color: var(--err); }
+.tool.warn small { color: var(--err); }
 .pad { display: grid; grid-template-columns: repeat(9, 1fr); gap: 6px; }
 @media (min-width: 860px) { .pad { grid-template-columns: repeat(3, 1fr); gap: 8px; } }
 .num {
@@ -168,6 +170,7 @@ h1 { font-family: var(--font-display); font-weight: 800; font-size: 34px; letter
         <button id="hintBtn" type="button" class="tool">提示<small id="hintCount">已用 0</small></button>
         <button id="eraseBtn" type="button" class="tool">清除<small>Del</small></button>
         <button id="noteBtn" type="button" class="tool" aria-pressed="false">筆記<small id="noteState">關</small></button>
+        <button id="resetBtn" type="button" class="tool">重來<small id="resetState">Reset</small></button>
       </div>
       <div id="pad" class="pad"></div>
       <div>
@@ -344,6 +347,7 @@ function render() {
   $('#pause').hidden = !S.paused || S.done;
   $('#pauseBtn').textContent = S.paused ? '繼續' : '暫停';
   $('#pauseBtn').disabled = S.done;
+  $('#resetBtn').disabled = S.done || S.paused;
   if (S.paused) ['undoBtn', 'hintBtn', 'eraseBtn', 'noteBtn'].forEach(id => $('#' + id).disabled = true);
   if (S.paused) padBtns.forEach(b => b.disabled = true);
 }
@@ -410,7 +414,7 @@ function hint() {
 }
 function newGame(level) {
   if (busy) return;
-  busy = true; renderLevels(); msg('');
+  busy = true; disarmReset(); renderLevels(); msg('');
   setTimeout(() => {
     const g = generate(level);
     S = {
@@ -424,12 +428,31 @@ function newGame(level) {
   }, 30);
 }
 
+let resetTimer = null;
+function disarmReset() {
+  clearTimeout(resetTimer); resetTimer = null;
+  $('#resetBtn').classList.remove('warn'); $('#resetState').textContent = 'Reset';
+}
+function resetGame() {
+  if (!S || S.done || S.paused) return;
+  if (!resetTimer) {  // first press arms, second press within 3s confirms
+    $('#resetBtn').classList.add('warn'); $('#resetState').textContent = '再按確認';
+    msg('再按一次「重來」會清空目前的填寫,題目不變');
+    resetTimer = setTimeout(() => { disarmReset(); msg(''); }, 3000);
+    return;
+  }
+  disarmReset();
+  S.vals = S.puzzle.slice(); S.notes = new Array(81).fill(0); S.hinted = new Array(81).fill(false);
+  S.hist = []; S.seconds = 0; S.hints = 0; S.noteMode = false; S.sel = S.vals.indexOf(0);
+  msg('已重來,題目不變'); render(); save();
+}
 function togglePause() {
   if (!S || S.done) return;
   S.paused = !S.paused; msg(S.paused ? '' : '繼續計時'); render(); save();
 }
 $('#pauseBtn').addEventListener('click', togglePause);
 $('#resumeBtn').addEventListener('click', togglePause);
+$('#resetBtn').addEventListener('click', resetGame);
 $('#undoBtn').addEventListener('click', undo);
 $('#hintBtn').addEventListener('click', hint);
 $('#eraseBtn').addEventListener('click', erase);
